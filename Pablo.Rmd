@@ -1,0 +1,272 @@
+---
+title: 'Examen #2'
+author: "Pablo Vivas"
+date: "15/6/2020"
+output: rmdformats::readthedown
+---
+
+El código fuente y archivos conexos se pueden encontrar en este [repositorio.](https://github.com/pablo-vivas/sp1626)
+
+# Problema 1
+
+## a) Generar datos
+```{r}
+set.seed(6532)
+x <- rnorm(63,mean = 0.12,sd = 1)
+```
+
+## b) Determinar verolimilitud
+\begin{align}
+L(\theta,\sigma^{2}|X) &= \prod_{i=1}^{n}f(x_{i}|\theta, \sigma^{2}) \\
+&= \prod_{i=1}^{n} \frac{1}{\sqrt{2\pi}} e^{-\frac{1}{2}(x_{i}-\theta)^{2}} \\
+&= (2\pi)^{\frac{-n}{2}} e^{-\frac{1}{2} (\sum x_{i}^{2}-2\theta \sum x_{i}+\theta^{2}n)}
+\end{align}
+
+Además, para mi muestra se tienen los siguientes estadísticos:
+
+```{r}
+(x_s <- sum(x))
+(x_2 <- sum(x*x))
+(x_n <- length(x))
+```
+
+Y la verosimilitud quedaría de la siguiente forma:
+
+\begin{align}
+L(\theta,\sigma^{2}|X) &= (2\pi)^{\frac{-63}{2}} e^{-\frac{1}{2} (60,24-2*\theta*14,14+\theta^{2}63)}
+\end{align}
+
+
+## c) Determinar Posterior
+\begin{align}
+
+P(\theta|X) &= L(\theta,\sigma^{2}|X)*P(\theta)\\
+&= (2\pi)^{\frac{-63}{2}} e^{-\frac{1}{2} (60,24-2*\theta*14,14+\theta^{2}63)}*\frac{1}{\pi(1+\theta^{2})}
+\end{align}
+
+## d) Obtener densidad Posterior
+```{r}
+n <- 100000
+theta <- numeric(n)
+theta[1] <- runif(1)
+
+f <- function(param){
+  r = ((2*pi)^(-x_n)*exp((-1/2)*(x_2-(2*param*x_s)+(param*param*x_n))))/(pi*(1+param**2))
+  return(r)
+}
+
+for(i in 2:n){
+  prop <- rnorm(1,mean = theta[i-1])
+  radio <- f(prop)/f(theta[i-1])
+  if(min(radio,1) > runif(1)){ 
+    theta[i] = prop}
+  else theta[i] = theta[i-1]
+}
+```
+
+## e) Estimación vs Parámetro
+
+```{r}
+#Estimado
+(mean(theta))
+#Verdadero
+(0.12)
+```
+
+## f) Graficación
+
+```{r}
+library(ggplot2)
+ggplot(data.frame(theta), aes(theta,colour = 3,fill= 3)) +
+  geom_density(alpha=0.5,show.legend = F) +
+  geom_vline(xintercept =0.12, linetype = "dashed")
+```
+
+```{r, include=FALSE}
+rm(list=ls())
+```
+
+# Problema 2
+
+## a) Generar datos
+
+```{r}
+set.seed(59736)
+n <- 10000
+x <- rgeom(365,0.57)
+```
+
+## b) Determinar verolimilitud
+
+\begin{align}
+L(\theta,\sigma^{2}|X) &= \prod_{i=1}^{n}f(x_{i}|\theta) \\
+&= \prod_{i=1}^{n} (1-\theta)^{x_{i}-1}\theta \\
+&= \theta^{n}(1-\theta)^{\sum x_{i}-1}\\
+&= \theta^{n}(1-\theta)^{\sum x_{i}-n}\\
+&= \theta^{n}(1-\theta)^{n\bar{x}-n}\\
+&= \theta^{n}(1-\theta)^{n(\bar{x}-1)}\\
+\end{align}
+
+Con esta muestra, tenemos las siguientes estadísticas:
+
+```{r}
+(x_n <- 365)
+(mean(x))
+```
+
+Y la verosimilitud tendría la siguiente forma:
+
+\begin{align}
+L(\theta,\sigma^{2}|X) &=  \theta^{365}(1-\theta)^{n(0.72-1)}\\
+\end{align}
+
+## c) Determinar Posterior
+
+Asuma la siguiente previa $\theta \sim Beta(10,15)$. Luego, la posterior toma la siguiente forma:
+
+\begin{align}
+
+P(\theta|X) &= L(\theta|X)*P(\theta)\\
+&\propto \theta^{n}(1-\theta)^{n(\bar{x}-1)} \cdot \theta^{10-1}(1-\theta)^{15-1}\\
+&= \theta^{n+10-1}(1-\theta)^{n(\bar{x}-1)+15-1}
+\end{align}
+
+## d) Obtener densidad Posterior
+
+```{r}
+a <- 10
+b <- 15
+y <- numeric(n)
+theta <-numeric(n)
+y[1] <- 0.9
+theta[1] <-0.5
+
+for (i in 2:n){
+  y[i] <- mean(rgeom(x_n,theta[i-1]))
+  theta[i] <- rbeta(1,x_n+10,abs(x_n*(y[i]-1)+15))
+}
+```
+
+## f) Estimación vs Parámetro
+```{r}
+#Estimado
+(mean(theta))
+#Verdadero
+(0.57)
+```
+
+## g) Graficación
+```{r}
+ggplot(data.frame(theta), aes(theta,colour = "red",fill= "red")) +
+  geom_density(alpha=0.1,show.legend = F) +
+  geom_vline(xintercept =0.57, linetype = "dashed")
+```
+
+# Problema 3
+
+Se analizó el problema desde dos aristas:
+
++ Utilizando los vectores antes y después
+
++ Utilizando el vector de las diferencias
+
+## Caso 1
+
+Código utilizado en OpenBUGS
+
+```{r, eval=FALSE}
+model{
+for (i in 1:20){
+x[i] ~ dnorm (mu[1], prec[1]) 
+y[i] ~ dnorm (mu[2], prec[2])
+}
+mu[1] ~ dnorm (0, 0.0001)
+mu[2] ~ dnorm (0, 0.0001)
+prec[1] ~ dgamma (0.001, 0.001) 
+prec[2] ~ dgamma (0.001, 0.001)
+s2[1] <- 1/prec[1]
+s2[2] <- 1/prec[2]
+md <- mu[1] - mu[2]
+}
+
+#Datos
+list(x =c(187, 146, 187, 210, 198, 176, 146, 198, 198, 187,
+154, 173, 187, 210, 167, 148, 198, 160, 176, 187),
+y=c(136, 131, 201, 201, 129, 157, 145, 147, 147, 168,
+165, 147, 147, 168, 147, 180, 147, 180, 151, 157))
+
+#Valores Iniciales
+list( mu=c(0,0), prec=c(1,1))
+
+```
+
+Resultado
+
+```{r, echo=FALSE}
+library(tibble)
+library(kableExtra)
+r <- tibble(
+  mean = 22.12,
+  sd = 6.820,
+  MC_error = 0.06652,
+  val2.5pc = 8.650,
+  median = 22.180,
+  val97.5pc = 35.51,
+  sample = 10000
+)
+```
+
+```{r, echo=FALSE}
+r %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped")
+```
+
+## Caso 2
+
+Código utilizado en OpenBUGS
+
+```{r, eval=FALSE}
+model{
+for (i in 1:20){
+x[i] ~ dnorm (mu[1], prec[1])
+}
+mu[1] ~ dnorm (0, 0.0001) #Previa
+prec[1] ~ dgamma (0.001, 0.001) 
+s2[1] <- 1/prec[1]
+}
+
+#Datos
+list(x = c(51,15,-14,9,69,19,1,51,51,19,-11,26,40,42,20,
+-32,51,-20,25,30))
+
+#Iniciales
+list(mu=c(0), prec=c(1))
+```
+
+
+```{r, echo=FALSE}
+r1 <- tibble(
+  mean = 22.03,
+  sd = 6.41,
+  MC_error = 0.06357,
+  val2.5pc = 9.448,
+  median = 22.06,
+  val97.5pc = 34.53,
+  sample = 10000
+)
+```
+
+```{r, echo=FALSE}
+r1 %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped")
+```
+
+En ambos casos, para diagnosticar la convergencia del modelo se utilizaron los siguientes criterios:
+
++ _History or Trace Plots_ (`1.png` y `3.png`)
++ _Autocorrelation Plot_ (`2.png` y `4.png`)
++ _MC error_
+
+Los tres criterios apuntan a una convergencia.
